@@ -1,12 +1,10 @@
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
+import path from "path";
+import { fileURLToPath } from "url";
 import { GoogleGenAI, Type } from "@google/genai";
 import { createServer as createViteServer } from "vite";
-import path from "path";
-
-import path from 'path';
-import { fileURLToPath } from 'url';
 
 // Recreate __filename and __dirname in ES Modules
 const __filename = fileURLToPath(import.meta.url);
