@@ -17,6 +17,7 @@ import {
   Users,
   Image as ImageIcon,
   X,
+  Trash2,
   History
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
@@ -27,6 +28,7 @@ import {
   YAxis, 
   Tooltip, 
   ResponsiveContainer, 
+  ComposedChart,
   Cell,
   PieChart,
   Pie,
@@ -87,7 +89,7 @@ export default function App() {
   const [results, setResults] = useState<ResearchResults | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
-  const [history, setHistory] = useState<{ id: string; query: string; productName: string; summary?: string; timestamp: string }[]>([]);
+  const [history, setHistory] = useState<{ id: string; query: string; productName: string; summary?: string; sentimentScore?: number; timestamp: string }[]>([]);
 
   const kpiOptions = ['GMV', 'CAC', 'LTV', 'Margins', 'Conversion', 'AOV'];
   const marketplaceOptions = ['Amazon', 'Flipkart', 'Shopify', 'D2C', 'Meesho', 'Myntra'];
@@ -109,6 +111,30 @@ export default function App() {
   useEffect(() => {
     fetchHistory();
   }, []);
+
+  const deleteHistoryItem = async (e: React.MouseEvent, id: string) => {
+    e.stopPropagation();
+    try {
+      const response = await fetch(`/api/history/${id}`, { method: 'DELETE' });
+      if (response.ok) {
+        setHistory(prev => prev.filter(item => item.id !== id));
+      }
+    } catch (err) {
+      console.error('Failed to delete history item:', err);
+    }
+  };
+
+  const clearHistory = async () => {
+    if (!confirm('Are you sure you want to clear all research history?')) return;
+    try {
+      const response = await fetch('/api/history', { method: 'DELETE' });
+      if (response.ok) {
+        setHistory([]);
+      }
+    } catch (err) {
+      console.error('Failed to clear history:', err);
+    }
+  };
 
   const toggleKpi = (kpi: string) => {
     setKpis(prev => prev.includes(kpi) ? prev.filter(k => k !== kpi) : [...prev, kpi]);
@@ -317,51 +343,83 @@ export default function App() {
 
           {/* Research History */}
           <section>
-            <h3 className="text-[10px] uppercase tracking-[0.2em] text-slate-500 font-bold mb-4 flex items-center gap-2">
-              <History className="w-3 h-3" /> Research History
-            </h3>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-[10px] uppercase tracking-[0.2em] text-slate-500 font-bold flex items-center gap-2">
+                <History className="w-3 h-3" /> Research History
+              </h3>
+              {history.length > 0 && (
+                <button 
+                  onClick={clearHistory}
+                  className="text-[9px] text-slate-600 hover:text-red-400 font-bold uppercase tracking-widest transition-colors"
+                >
+                  Clear All
+                </button>
+              )}
+            </div>
             <div className="space-y-3">
               {history.length === 0 ? (
-                <p className="text-[10px] text-slate-600 italic px-2">No previous searches found.</p>
+                <div className="p-6 rounded-2xl border border-dashed border-white/5 flex flex-col items-center justify-center gap-2">
+                  <Database className="w-5 h-5 text-slate-800" />
+                  <p className="text-[10px] text-slate-600 italic text-center">No previous searches found.</p>
+                </div>
               ) : (
                 history.map(item => (
-                  <button
-                    key={item.id}
-                    onClick={() => setQuery(item.query)}
-                    className="w-full text-left p-4 rounded-2xl bg-white/5 border border-white/10 hover:border-blue-500/50 hover:bg-white/[0.08] transition-all group relative overflow-hidden"
-                  >
-                    <div className="absolute top-0 right-0 w-16 h-16 bg-blue-500/5 rounded-full -mr-8 -mt-8 blur-2xl group-hover:bg-blue-500/10 transition-all" />
-                    <div className="relative z-10 flex flex-col gap-2.5">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <div className="w-6 h-6 rounded-lg bg-blue-500/10 flex items-center justify-center border border-blue-500/20">
-                            <Database className="w-3 h-3 text-blue-400" />
+                  <div key={item.id} className="group relative">
+                    <button
+                      onClick={() => setQuery(item.query)}
+                      className="w-full text-left p-4 rounded-2xl bg-white/5 border border-white/10 hover:border-blue-500/50 hover:bg-white/[0.08] transition-all relative overflow-hidden"
+                    >
+                      <div className="absolute top-0 right-0 w-16 h-16 bg-blue-500/5 rounded-full -mr-8 -mt-8 blur-2xl group-hover:bg-blue-500/10 transition-all" />
+                      <div className="relative z-10 flex flex-col gap-2.5">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <div className="w-6 h-6 rounded-lg bg-blue-500/10 flex items-center justify-center border border-blue-500/20">
+                              <Database className="w-3 h-3 text-blue-400" />
+                            </div>
+                            <span className="text-[11px] font-bold text-slate-200 truncate max-w-[120px] group-hover:text-white transition-colors">
+                              {item.productName || 'Untitled Research'}
+                            </span>
                           </div>
-                          <span className="text-[11px] font-bold text-slate-200 truncate max-w-[140px] group-hover:text-white transition-colors">
-                            {item.productName || 'Untitled Research'}
-                          </span>
+                          <div className="flex items-center gap-1.5">
+                            {item.sentimentScore !== undefined && (
+                              <div className={`px-1.5 py-0.5 rounded text-[8px] font-bold uppercase ${
+                                item.sentimentScore > 70 ? 'bg-emerald-500/10 text-emerald-500' :
+                                item.sentimentScore > 40 ? 'bg-amber-500/10 text-amber-500' :
+                                'bg-red-500/10 text-red-500'
+                              }`}>
+                                {item.sentimentScore}%
+                              </div>
+                            )}
+                            <ArrowRight className="w-3 h-3 text-slate-600 group-hover:text-blue-400 group-hover:translate-x-0.5 transition-all" />
+                          </div>
                         </div>
-                        <ArrowRight className="w-3 h-3 text-slate-600 group-hover:text-blue-400 group-hover:translate-x-0.5 transition-all" />
-                      </div>
-                      
-                      {item.summary && (
-                        <p className="text-[10px] text-slate-500 line-clamp-2 leading-relaxed group-hover:text-slate-400 transition-colors">
-                          {item.summary}
-                        </p>
-                      )}
+                        
+                        {item.summary && (
+                          <p className="text-[10px] text-slate-500 line-clamp-2 leading-relaxed group-hover:text-slate-400 transition-colors">
+                            {item.summary}
+                          </p>
+                        )}
 
-                      <div className="flex items-center justify-between pt-1 border-t border-white/5">
-                        <div className="flex items-center gap-2">
-                          <span className="text-[9px] text-slate-600 font-bold uppercase tracking-wider">
-                            {new Date(item.timestamp).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                        <div className="flex items-center justify-between pt-1 border-t border-white/5">
+                          <div className="flex items-center gap-2">
+                            <span className="text-[9px] text-slate-600 font-bold uppercase tracking-wider">
+                              {new Date(item.timestamp).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                            </span>
+                          </div>
+                          <span className="text-[9px] text-slate-500 italic truncate max-w-[100px]">
+                            "{item.query}"
                           </span>
                         </div>
-                        <span className="text-[9px] text-slate-500 italic truncate max-w-[100px]">
-                          "{item.query}"
-                        </span>
                       </div>
-                    </div>
-                  </button>
+                    </button>
+                    <button
+                      onClick={(e) => deleteHistoryItem(e, item.id)}
+                      className="absolute top-2 right-2 p-1.5 rounded-lg bg-red-500/10 text-red-500 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-500 hover:text-white z-20"
+                      title="Delete entry"
+                    >
+                      <Trash2 className="w-3 h-3" />
+                    </button>
+                  </div>
                 ))
               )}
             </div>
@@ -565,7 +623,16 @@ export default function App() {
                     </div>
                     <div className="h-72 w-full">
                       <ResponsiveContainer width="100%" height="100%">
-                        <BarChart data={results.marketComparison}>
+                        <ComposedChart data={results.marketComparison.map(curr => {
+                          const history = results.historicalPriceTrends.filter(h => h.platform === curr.platform);
+                          const avgHist = history.length > 0 
+                            ? history.reduce((sum, h) => sum + h.price, 0) / history.length 
+                            : null;
+                          return {
+                            ...curr,
+                            historicalPrice: avgHist
+                          };
+                        })}>
                           <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
                           <XAxis dataKey="platform" tick={{ fill: '#94a3b8', fontSize: 10 }} />
                           <YAxis tick={{ fill: '#94a3b8', fontSize: 10 }} />
@@ -574,18 +641,29 @@ export default function App() {
                             contentStyle={{ backgroundColor: '#16161a', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '12px' }}
                             content={({ active, payload, label }) => {
                               if (active && payload && payload.length) {
-                                const currentPrice = payload[0].value;
+                                const currentPrice = payload.find(p => p.dataKey === 'price')?.value;
+                                const historicalPrice = payload.find(p => p.dataKey === 'historicalPrice')?.value;
                                 const platformHistory = results.historicalPriceTrends.filter(h => h.platform === label);
+                                
                                 return (
                                   <div className="p-4 bg-[#16161a] border border-white/10 rounded-xl shadow-2xl">
                                     <p className="text-white font-bold mb-2">{label}</p>
-                                    <div className="flex items-center justify-between gap-8 mb-1">
-                                      <span className="text-[10px] text-slate-500 uppercase font-bold">Current Price</span>
-                                      <span className="text-emerald-500 font-bold">${currentPrice}</span>
+                                    <div className="space-y-2">
+                                      <div className="flex items-center justify-between gap-8">
+                                        <span className="text-[10px] text-slate-500 uppercase font-bold">Current Price</span>
+                                        <span className="text-emerald-500 font-bold">${currentPrice}</span>
+                                      </div>
+                                      {historicalPrice && (
+                                        <div className="flex items-center justify-between gap-8">
+                                          <span className="text-[10px] text-slate-500 uppercase font-bold">Avg. Historical</span>
+                                          <span className="text-blue-400 font-bold">${historicalPrice.toFixed(2)}</span>
+                                        </div>
+                                      )}
                                     </div>
+                                    
                                     {platformHistory.length > 0 && (
                                       <div className="mt-3 pt-3 border-t border-white/5">
-                                        <p className="text-[9px] text-slate-600 uppercase font-black mb-2 tracking-widest">Price History</p>
+                                        <p className="text-[9px] text-slate-600 uppercase font-black mb-2 tracking-widest">Price History Log</p>
                                         {platformHistory.map((h, idx) => (
                                           <div key={idx} className="flex items-center justify-between gap-8 text-[10px]">
                                             <span className="text-slate-400">{new Date(h.date).toLocaleDateString()}</span>
@@ -601,7 +679,16 @@ export default function App() {
                             }}
                           />
                           <Bar dataKey="price" fill="#10b981" radius={[4, 4, 0, 0]} barSize={40} />
-                        </BarChart>
+                          <Line 
+                            type="monotone" 
+                            dataKey="historicalPrice" 
+                            stroke="#3b82f6" 
+                            strokeWidth={3} 
+                            dot={{ fill: '#3b82f6', r: 4, strokeWidth: 2, stroke: '#16161a' }}
+                            activeDot={{ r: 6, strokeWidth: 0 }}
+                            connectNulls
+                          />
+                        </ComposedChart>
                       </ResponsiveContainer>
                     </div>
                   </div>

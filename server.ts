@@ -92,6 +92,8 @@ const searchMemory = async (query: string, ai: any) => {
         productName: res.payload?.productName,
         summary: res.payload?.summary,
         marketComparison: res.payload?.marketComparison,
+        competitors: res.payload?.competitors,
+        sentimentScore: res.payload?.sentimentScore,
         timestamp: res.payload?.timestamp,
         relevanceScore: res.score
       }));
@@ -159,7 +161,7 @@ async function startServer() {
       if (!(await ensureCollection(client))) return res.json([]);
 
       const history = await client.scroll(QDRANT_COLLECTION, {
-        limit: 10,
+        limit: 20,
         with_payload: true,
         with_vector: false
       });
@@ -169,6 +171,7 @@ async function startServer() {
         query: p.payload?.query as string,
         productName: p.payload?.productName as string,
         summary: p.payload?.summary as string,
+        sentimentScore: p.payload?.sentimentScore as number,
         timestamp: p.payload?.timestamp as string
       })).sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
 
@@ -176,6 +179,35 @@ async function startServer() {
     } catch (err) {
       console.error("Failed to fetch history:", err);
       res.status(500).json({ error: "Failed to fetch history" });
+    }
+  });
+
+  app.delete("/api/history/:id", async (req, res) => {
+    const client = getQdrantClient();
+    if (!client) return res.status(500).json({ error: "Qdrant not connected" });
+
+    try {
+      await client.delete(QDRANT_COLLECTION, {
+        points: [req.params.id]
+      });
+      res.json({ success: true });
+    } catch (err) {
+      console.error("Failed to delete history item:", err);
+      res.status(500).json({ error: "Failed to delete item" });
+    }
+  });
+
+  app.delete("/api/history", async (req, res) => {
+    const client = getQdrantClient();
+    if (!client) return res.status(500).json({ error: "Qdrant not connected" });
+
+    try {
+      await client.deleteCollection(QDRANT_COLLECTION);
+      await ensureCollection(client);
+      res.json({ success: true });
+    } catch (err) {
+      console.error("Failed to clear history:", err);
+      res.status(500).json({ error: "Failed to clear history" });
     }
   });
 
@@ -227,25 +259,33 @@ async function startServer() {
       const pastResearch = await searchMemory(query, ai);
       let memoryContext = "";
       if (pastResearch && pastResearch.length > 0) {
-        memoryContext = "\n\n### HISTORICAL CONTEXT (PAST RESEARCH)\n";
-        memoryContext += "The following insights were retrieved from previous research sessions related to this query:\n";
+        memoryContext = "\n\n### HISTORICAL CONTEXT & TREND ANALYSIS\n";
+        memoryContext += "The following insights were retrieved from previous research sessions. Use these to identify market trends, price shifts, and evolving consumer sentiment.\n";
         
         pastResearch.forEach((res: any, index: number) => {
           const date = res.timestamp ? new Date(res.timestamp).toLocaleDateString() : "Unknown Date";
-          memoryContext += `\n[Research Session ${index + 1} - ${date}]\n`;
-          memoryContext += `- Product: ${res.productName || "N/A"}\n`;
-          memoryContext += `- Summary: ${res.summary}\n`;
+          memoryContext += `\n--- [Research Session ${index + 1} - ${date}] ---\n`;
+          memoryContext += `* Product: ${res.productName || "N/A"}\n`;
+          memoryContext += `* Sentiment Score: ${res.sentimentScore || "N/A"}/100\n`;
+          memoryContext += `* Summary: ${res.summary}\n`;
           
           if (res.marketComparison && Array.isArray(res.marketComparison)) {
-            memoryContext += `- Past Market Data:\n`;
+            memoryContext += `* Market Snapshot:\n`;
             res.marketComparison.forEach((platform: any) => {
-              memoryContext += `  * ${platform.platform}: Price: ${platform.price}, Demand: ${platform.demandScore}/100, Quality: ${platform.qualityScore}/100\n`;
+              memoryContext += `  - ${platform.platform}: Price: ${platform.price}, Demand: ${platform.demandScore}/100, Supply: ${platform.supplyLevel}/100\n`;
             });
           }
-          memoryContext += `-----------------------------------\n`;
+
+          if (res.competitors && Array.isArray(res.competitors)) {
+            memoryContext += `* Competitors Noted: ${res.competitors.map((c: any) => c.name).join(", ")}\n`;
+          }
         });
         
-        memoryContext += "\nUse this historical data to identify trends, price shifts, or recurring issues. If the current data differs significantly, highlight the change to the user.";
+        memoryContext += "\nINSTRUCTIONS FOR TREND ANALYSIS:\n";
+        memoryContext += "1. Compare current prices with the historical prices listed above.\n";
+        memoryContext += "2. Note if sentiment has improved or declined based on past scores.\n";
+        memoryContext += "3. If a platform's demand score has changed, highlight this as a shift in market interest.\n";
+        memoryContext += "4. Integrate these historical insights into your 'strategicRecommendations' and 'pricingInsights'.";
       }
 
       const systemInstruction = `You are an E-commerce Research Agent. The user wants to analyze a product. 
