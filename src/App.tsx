@@ -14,7 +14,9 @@ import {
   MessageSquare,
   Globe,
   CheckCircle2,
-  Users
+  Users,
+  Image as ImageIcon,
+  X
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
@@ -52,6 +54,7 @@ interface ResearchResults {
   topComplaints: string[];
   pricingInsights: string;
   strategicRecommendations: string[];
+  foundImages?: string[];
 }
 
 export default function App() {
@@ -65,6 +68,7 @@ export default function App() {
   const [isLoading, setIsLoading] = useState(false);
   const [results, setResults] = useState<ResearchResults | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [selectedImage, setSelectedImage] = useState<string | null>(null);
 
   const kpiOptions = ['GMV', 'CAC', 'LTV', 'Margins', 'Conversion', 'AOV'];
   const marketplaceOptions = ['Amazon', 'Flipkart', 'Shopify', 'D2C', 'Meesho', 'Myntra'];
@@ -91,7 +95,15 @@ export default function App() {
       const response = await fetch('/api/research', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query, mode, kpis, marketplaces, category, goal }),
+        body: JSON.stringify({ 
+          query, 
+          mode, 
+          kpis, 
+          marketplaces, 
+          category, 
+          goal,
+          image: selectedImage 
+        }),
       });
 
       if (!response.ok) {
@@ -112,6 +124,17 @@ export default function App() {
       setError(errorMessage);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setSelectedImage(reader.result as string);
+      };
+      reader.readAsDataURL(file);
     }
   };
 
@@ -394,6 +417,23 @@ export default function App() {
                       <Globe className="w-4 h-4 text-emerald-500" /> Executive Summary
                     </h4>
                     <p className="text-slate-200 leading-relaxed text-lg font-medium">{results.summary}</p>
+                    
+                    {results.foundImages && results.foundImages.length > 0 && (
+                      <div className="mt-8">
+                        <h5 className="text-[10px] uppercase tracking-widest text-slate-500 font-bold mb-4">Market Visuals Found</h5>
+                        <div className="flex gap-4 overflow-x-auto pb-4 custom-scrollbar">
+                          {results.foundImages.map((img, i) => (
+                            <img 
+                              key={i} 
+                              src={img} 
+                              alt={`Market ${i}`} 
+                              className="h-24 w-auto rounded-xl border border-white/10 hover:border-emerald-500/50 transition-all cursor-zoom-in"
+                              referrerPolicy="no-referrer"
+                            />
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
 
                   {/* Market Dashboard Radar */}
@@ -533,6 +573,30 @@ export default function App() {
           {/* Search Bar Container */}
           <div className="fixed bottom-0 left-72 right-0 p-8 bg-gradient-to-t from-[#0a0a0c] via-[#0a0a0c] to-transparent">
             <div className="max-w-4xl mx-auto">
+              <AnimatePresence>
+                {selectedImage && (
+                  <motion.div 
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: 10 }}
+                    className="mb-4 relative inline-block"
+                  >
+                    <img 
+                      src={selectedImage} 
+                      alt="Selected" 
+                      className="w-20 h-20 object-cover rounded-xl border border-emerald-500/50 shadow-lg shadow-emerald-500/20"
+                      referrerPolicy="no-referrer"
+                    />
+                    <button 
+                      onClick={() => setSelectedImage(null)}
+                      className="absolute -top-2 -right-2 w-6 h-6 bg-rose-500 text-white rounded-full flex items-center justify-center shadow-lg hover:bg-rose-400 transition-colors"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
               <form 
                 onSubmit={handleResearch}
                 className="relative group"
@@ -545,9 +609,18 @@ export default function App() {
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
                   placeholder="Ask anything about your products, competitors, or market... (Quick | Deep)"
-                  className="w-full bg-[#16161a] border border-white/10 rounded-2xl py-5 pl-16 pr-32 text-white placeholder:text-slate-600 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500 transition-all shadow-2xl"
+                  className="w-full bg-[#16161a] border border-white/10 rounded-2xl py-5 pl-16 pr-44 text-white placeholder:text-slate-600 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500 transition-all shadow-2xl"
                 />
                 <div className="absolute inset-y-2 right-2 flex items-center gap-2">
+                  <label className="h-full px-4 flex items-center justify-center bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white rounded-xl cursor-pointer transition-all border border-white/5">
+                    <ImageIcon className="w-5 h-5" />
+                    <input 
+                      type="file" 
+                      accept="image/*" 
+                      onChange={handleImageUpload} 
+                      className="hidden" 
+                    />
+                  </label>
                   <button 
                     type="submit"
                     disabled={isLoading || !query.trim()}

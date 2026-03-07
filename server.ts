@@ -112,7 +112,7 @@ const saveToMemory = async (result: any, query: string, ai: any) => {
     // 3. Upsert into Qdrant
     await client.upsert(QDRANT_COLLECTION, {
       points: [{
-        id: crypto.randomUUID(),
+        id: crypto.randomBytes(16).toString('hex'), // More robust ID generation for Node
         vector,
         payload: {
           query,
@@ -137,7 +137,7 @@ async function startServer() {
 
   // API Route for Research
   app.post("/api/research", async (req, res) => {
-    const { query, mode, kpis, marketplaces, category, goal } = req.body;
+    const { query, mode, kpis, marketplaces, category, goal, image } = req.body;
 
     if (!query) {
       return res.status(400).json({ error: "Query is required" });
@@ -159,6 +159,9 @@ async function startServer() {
         link: r.link,
         snippet: r.snippet
       })) || [];
+
+      const foundImages = serpData.inline_images?.slice(0, 4).map((img: any) => img.thumbnail) || 
+                          serpData.images_results?.slice(0, 4).map((img: any) => img.thumbnail) || [];
 
       // Step 2: LLM Processing with Gemini
       let geminiApiKey = process.env.GEMINI_API_KEY;
@@ -205,9 +208,29 @@ async function startServer() {
         const currentModel = "gemini-2.5-flash"; // Using Gemini 2.5 only as requested
         for (let i = 0; i < retries; i++) {
           try {
+            const parts: any[] = [{ text: `Analyze the product: ${query}` }];
+            
+            // Add user image if provided
+            if (image && typeof image === 'string' && image.includes(';base64,')) {
+              try {
+                const [mimePart, base64Data] = image.split(';base64,');
+                const mimeType = mimePart.split(':')[1];
+                if (mimeType && base64Data) {
+                  parts.push({
+                    inlineData: {
+                      mimeType,
+                      data: base64Data
+                    }
+                  });
+                }
+              } catch (imgErr) {
+                console.error("Failed to process user image:", imgErr);
+              }
+            }
+
             const response = await ai.models.generateContent({
               model: currentModel,
-              contents: [{ parts: [{ text: `Analyze the product: ${query}` }] }],
+              contents: [{ parts }],
               config: {
                 systemInstruction,
                 responseMimeType: "application/json",
@@ -298,6 +321,7 @@ async function startServer() {
       if (!response) throw new Error("Failed to get response from Gemini after retries");
 
       const result = JSON.parse(response.text || "{}");
+      result.foundImages = foundImages;
       
       // Save to Qdrant Memory (Async, don't wait for it)
       saveToMemory(result, query, ai).catch(err => console.error("Memory save failed:", err));
