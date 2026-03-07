@@ -1,20 +1,49 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
+# EcomIntel: AI-Powered E-commerce Research Agent
 
-# Run and deploy your AI Studio app
+EcomIntel is a high-fidelity research tool designed for e-commerce professionals. It automates market analysis, competitor tracking, and customer sentiment research by combining live web intelligence with advanced AI reasoning.
 
-This contains everything you need to run your app locally.
+## 🚀 Key Features
 
-View your app in AI Studio: https://ai.studio/apps/f38205f3-792e-4ebb-827c-2ee6c5ceeb24
+- **Live Market Intelligence**: Fetches real-time data from the web using SerpApi to provide the most current market snapshot.
+- **Gemini 2.5 Powered**: Leverages the latest Gemini 2.5 Flash model for deep reasoning and strategic insights.
+- **Visual Analytics**:
+  - **Agent Reasoning Flowchart**: Visualizes the step-by-step logic used by the AI to arrive at conclusions.
+  - **Market Dashboard**: A radar chart summarizing Demand, Competition, and Growth potential.
+  - **Price Comparison**: Visual bar charts comparing product prices across different sources.
+  - **Sentiment Analysis**: Breakdown of customer sentiment (Positive, Neutral, Negative).
+- **KPI-Aligned Insights**: Focuses on business-critical metrics like GMV, CAC, LTV, and Margins.
+- **Dual Research Modes**:
+  - **Quick Mode**: Rapid summaries of prices and complaints (< 2 mins).
+  - **Deep Mode**: Comprehensive competitive analysis and demand trends (~10 mins).
 
-## Run Locally
+## 🛠️ Tech Stack
 
-**Prerequisites:**  Node.js
+- **Frontend**: React, Tailwind CSS, Lucide React, Motion (Framer Motion), Recharts.
+- **Backend**: Node.js, Express, Vite (Middleware).
+- **AI/Data**: Gemini 2.5 Flash, SerpApi.
 
+## ⚙️ Setup & Deployment
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+1. **Environment Variables**:
+   - `GEMINI_API_KEY`: Your Google Gemini API key.
+   - `SERPAPI_KEY`: Your SerpApi key for live web search.
+2. **Installation**:
+   ```bash
+   npm install
+   ```
+3. **Development**:
+   ```bash
+   npm run dev
+   ```
+4. **Production Build**:
+   ```bash
+   npm run build
+   ```
+5. **Start Server**:
+   ```bash
+   npm start
+   ```
+
+## 📝 License
+
+MIT
