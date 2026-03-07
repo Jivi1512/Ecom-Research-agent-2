@@ -317,7 +317,7 @@ async function startServer() {
 
       // Helper for retrying with exponential backoff
       const callGeminiWithRetry = async (retries = 3, delay = 2000) => {
-        const currentModel = "gemini-2.5-flash"; // Using Gemini 2.5 only as requested
+        const currentModel = "gemini-3.1-pro-preview" ; // Using Gemini 2.5 only as requested
         for (let i = 0; i < retries; i++) {
           try {
             const parts: any[] = [{ text: `Analyze the product: ${query}` }];
