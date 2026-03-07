@@ -16,7 +16,8 @@ import {
   CheckCircle2,
   Users,
   Image as ImageIcon,
-  X
+  X,
+  History
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
@@ -34,7 +35,12 @@ import {
   PolarGrid,
   PolarAngleAxis,
   PolarRadiusAxis,
-  CartesianGrid
+  CartesianGrid,
+  LineChart,
+  Line,
+  Legend,
+  AreaChart,
+  Area
 } from 'recharts';
 
 // Types for the research results
@@ -50,6 +56,18 @@ interface ResearchResults {
     competitionLevel: number;
     growthPotential: number;
   };
+  marketComparison: {
+    platform: string;
+    price: number;
+    qualityScore: number;
+    demandScore: number;
+    supplyLevel: number;
+  }[];
+  historicalPriceTrends: {
+    platform: string;
+    date: string;
+    price: number;
+  }[];
   competitors: { name: string; marketShare: string; strength: string }[];
   topComplaints: string[];
   pricingInsights: string;
@@ -69,11 +87,28 @@ export default function App() {
   const [results, setResults] = useState<ResearchResults | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const [history, setHistory] = useState<{ id: string; query: string; productName: string; summary?: string; timestamp: string }[]>([]);
 
   const kpiOptions = ['GMV', 'CAC', 'LTV', 'Margins', 'Conversion', 'AOV'];
   const marketplaceOptions = ['Amazon', 'Flipkart', 'Shopify', 'D2C', 'Meesho', 'Myntra'];
   const categoryOptions = ['Electronics', 'Fashion', 'FMCG', 'Home', 'Sports', 'Beauty'];
   const goalOptions = ['Growth', 'Retention', 'Profitability', 'Market Share'];
+
+  const fetchHistory = async () => {
+    try {
+      const response = await fetch('/api/history');
+      if (response.ok) {
+        const data = await response.json();
+        setHistory(data);
+      }
+    } catch (err) {
+      console.error('Failed to fetch history:', err);
+    }
+  };
+
+  useEffect(() => {
+    fetchHistory();
+  }, []);
 
   const toggleKpi = (kpi: string) => {
     setKpis(prev => prev.includes(kpi) ? prev.filter(k => k !== kpi) : [...prev, kpi]);
@@ -116,6 +151,7 @@ export default function App() {
 
       const data = await response.json();
       setResults(data);
+      fetchHistory(); // Refresh history after research
     } catch (err: any) {
       let errorMessage = err.message;
       if (errorMessage.includes('503') || errorMessage.includes('high demand')) {
@@ -276,6 +312,58 @@ export default function App() {
                   </div>
                 </button>
               ))}
+            </div>
+          </section>
+
+          {/* Research History */}
+          <section>
+            <h3 className="text-[10px] uppercase tracking-[0.2em] text-slate-500 font-bold mb-4 flex items-center gap-2">
+              <History className="w-3 h-3" /> Research History
+            </h3>
+            <div className="space-y-3">
+              {history.length === 0 ? (
+                <p className="text-[10px] text-slate-600 italic px-2">No previous searches found.</p>
+              ) : (
+                history.map(item => (
+                  <button
+                    key={item.id}
+                    onClick={() => setQuery(item.query)}
+                    className="w-full text-left p-4 rounded-2xl bg-white/5 border border-white/10 hover:border-blue-500/50 hover:bg-white/[0.08] transition-all group relative overflow-hidden"
+                  >
+                    <div className="absolute top-0 right-0 w-16 h-16 bg-blue-500/5 rounded-full -mr-8 -mt-8 blur-2xl group-hover:bg-blue-500/10 transition-all" />
+                    <div className="relative z-10 flex flex-col gap-2.5">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <div className="w-6 h-6 rounded-lg bg-blue-500/10 flex items-center justify-center border border-blue-500/20">
+                            <Database className="w-3 h-3 text-blue-400" />
+                          </div>
+                          <span className="text-[11px] font-bold text-slate-200 truncate max-w-[140px] group-hover:text-white transition-colors">
+                            {item.productName || 'Untitled Research'}
+                          </span>
+                        </div>
+                        <ArrowRight className="w-3 h-3 text-slate-600 group-hover:text-blue-400 group-hover:translate-x-0.5 transition-all" />
+                      </div>
+                      
+                      {item.summary && (
+                        <p className="text-[10px] text-slate-500 line-clamp-2 leading-relaxed group-hover:text-slate-400 transition-colors">
+                          {item.summary}
+                        </p>
+                      )}
+
+                      <div className="flex items-center justify-between pt-1 border-t border-white/5">
+                        <div className="flex items-center gap-2">
+                          <span className="text-[9px] text-slate-600 font-bold uppercase tracking-wider">
+                            {new Date(item.timestamp).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                          </span>
+                        </div>
+                        <span className="text-[9px] text-slate-500 italic truncate max-w-[100px]">
+                          "{item.query}"
+                        </span>
+                      </div>
+                    </div>
+                  </button>
+                ))
+              )}
             </div>
           </section>
         </aside>
@@ -456,27 +544,87 @@ export default function App() {
                     </div>
                   </div>
 
-                  {/* Price Comparison Chart */}
+                  {/* Platform Price Comparison Chart with Historical Context */}
                   <div className="col-span-3 p-8 rounded-3xl bg-white/5 border border-white/10">
-                    <h4 className="text-slate-400 text-xs font-bold uppercase tracking-widest mb-6 flex items-center gap-2">
-                      <TrendingUp className="w-4 h-4 text-emerald-500" /> Price Comparison Analysis
-                    </h4>
-                    <div className="h-64 w-full">
+                    <div className="flex items-center justify-between mb-6">
+                      <h4 className="text-slate-400 text-xs font-bold uppercase tracking-widest flex items-center gap-2">
+                        <TrendingUp className="w-4 h-4 text-emerald-500" /> Platform Price Comparison & Trends
+                      </h4>
+                      <div className="flex items-center gap-4">
+                        <div className="flex items-center gap-1.5">
+                          <div className="w-2 h-2 rounded-full bg-emerald-500" />
+                          <span className="text-[10px] text-slate-500 font-bold uppercase">Current</span>
+                        </div>
+                        {results.historicalPriceTrends.length > 0 && (
+                          <div className="flex items-center gap-1.5">
+                            <div className="w-2 h-2 rounded-full bg-blue-500" />
+                            <span className="text-[10px] text-slate-500 font-bold uppercase">Historical</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    <div className="h-72 w-full">
                       <ResponsiveContainer width="100%" height="100%">
-                        <BarChart data={results.priceComparison} layout="vertical">
-                          <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" horizontal={false} />
-                          <XAxis type="number" hide />
-                          <YAxis dataKey="product" type="category" width={100} tick={{ fill: '#94a3b8', fontSize: 10 }} />
+                        <BarChart data={results.marketComparison}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
+                          <XAxis dataKey="platform" tick={{ fill: '#94a3b8', fontSize: 10 }} />
+                          <YAxis tick={{ fill: '#94a3b8', fontSize: 10 }} />
                           <Tooltip 
                             cursor={{ fill: 'rgba(255,255,255,0.05)' }}
                             contentStyle={{ backgroundColor: '#16161a', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '12px' }}
-                            itemStyle={{ color: '#10b981' }}
+                            content={({ active, payload, label }) => {
+                              if (active && payload && payload.length) {
+                                const currentPrice = payload[0].value;
+                                const platformHistory = results.historicalPriceTrends.filter(h => h.platform === label);
+                                return (
+                                  <div className="p-4 bg-[#16161a] border border-white/10 rounded-xl shadow-2xl">
+                                    <p className="text-white font-bold mb-2">{label}</p>
+                                    <div className="flex items-center justify-between gap-8 mb-1">
+                                      <span className="text-[10px] text-slate-500 uppercase font-bold">Current Price</span>
+                                      <span className="text-emerald-500 font-bold">${currentPrice}</span>
+                                    </div>
+                                    {platformHistory.length > 0 && (
+                                      <div className="mt-3 pt-3 border-t border-white/5">
+                                        <p className="text-[9px] text-slate-600 uppercase font-black mb-2 tracking-widest">Price History</p>
+                                        {platformHistory.map((h, idx) => (
+                                          <div key={idx} className="flex items-center justify-between gap-8 text-[10px]">
+                                            <span className="text-slate-400">{new Date(h.date).toLocaleDateString()}</span>
+                                            <span className="text-blue-400 font-medium">${h.price}</span>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    )}
+                                  </div>
+                                );
+                              }
+                              return null;
+                            }}
                           />
-                          <Bar dataKey="price" fill="#10b981" radius={[0, 4, 4, 0]} barSize={20}>
-                            {results.priceComparison.map((entry, index) => (
-                              <Cell key={`cell-${index}`} fill={index === 0 ? '#10b981' : '#334155'} />
-                            ))}
-                          </Bar>
+                          <Bar dataKey="price" fill="#10b981" radius={[4, 4, 0, 0]} barSize={40} />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </div>
+
+                  {/* Market Comparison Matrix */}
+                  <div className="col-span-3 p-8 rounded-3xl bg-white/5 border border-white/10">
+                    <h4 className="text-slate-400 text-xs font-bold uppercase tracking-widest mb-6 flex items-center gap-2">
+                      <BarChart3 className="w-4 h-4 text-blue-500" /> Market Comparison Matrix (Quality, Demand, Supply)
+                    </h4>
+                    <div className="h-80 w-full">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={results.marketComparison}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
+                          <XAxis dataKey="platform" tick={{ fill: '#94a3b8', fontSize: 10 }} />
+                          <YAxis tick={{ fill: '#94a3b8', fontSize: 10 }} />
+                          <Tooltip 
+                            cursor={{ fill: 'rgba(255,255,255,0.05)' }}
+                            contentStyle={{ backgroundColor: '#16161a', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '12px' }}
+                          />
+                          <Legend wrapperStyle={{ paddingTop: '20px', fontSize: '10px', textTransform: 'uppercase', fontWeight: 'bold' }} />
+                          <Bar dataKey="qualityScore" name="Quality" fill="#10b981" radius={[4, 4, 0, 0]} />
+                          <Bar dataKey="demandScore" name="Demand" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+                          <Bar dataKey="supplyLevel" name="Supply" fill="#f59e0b" radius={[4, 4, 0, 0]} />
                         </BarChart>
                       </ResponsiveContainer>
                     </div>

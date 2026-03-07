@@ -91,7 +91,9 @@ const searchMemory = async (query: string, ai: any) => {
         query: res.payload?.query,
         productName: res.payload?.productName,
         summary: res.payload?.summary,
-        score: res.score
+        marketComparison: res.payload?.marketComparison,
+        timestamp: res.payload?.timestamp,
+        relevanceScore: res.score
       }));
     }
   } catch (err) {
@@ -130,6 +132,7 @@ const saveToMemory = async (result: any, query: string, ai: any) => {
           query,
           productName: result.productName,
           summary: result.summary,
+          marketComparison: result.marketComparison,
           timestamp: new Date().toISOString()
         }
       }]
@@ -146,6 +149,35 @@ async function startServer() {
 
   app.use(cors());
   app.use(express.json());
+
+  // API Route for History
+  app.get("/api/history", async (req, res) => {
+    const client = getQdrantClient();
+    if (!client) return res.json([]);
+
+    try {
+      if (!(await ensureCollection(client))) return res.json([]);
+
+      const history = await client.scroll(QDRANT_COLLECTION, {
+        limit: 10,
+        with_payload: true,
+        with_vector: false
+      });
+
+      const formattedHistory = history.points.map(p => ({
+        id: p.id,
+        query: p.payload?.query as string,
+        productName: p.payload?.productName as string,
+        summary: p.payload?.summary as string,
+        timestamp: p.payload?.timestamp as string
+      })).sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+
+      res.json(formattedHistory);
+    } catch (err) {
+      console.error("Failed to fetch history:", err);
+      res.status(500).json({ error: "Failed to fetch history" });
+    }
+  });
 
   // API Route for Research
   app.post("/api/research", async (req, res) => {
@@ -193,9 +225,28 @@ async function startServer() {
 
       // Step 3: Search Memory for Context (RAG)
       const pastResearch = await searchMemory(query, ai);
-      const memoryContext = pastResearch 
-        ? `\n\nHere is relevant historical context from past research:\n${JSON.stringify(pastResearch)}`
-        : "";
+      let memoryContext = "";
+      if (pastResearch && pastResearch.length > 0) {
+        memoryContext = "\n\n### HISTORICAL CONTEXT (PAST RESEARCH)\n";
+        memoryContext += "The following insights were retrieved from previous research sessions related to this query:\n";
+        
+        pastResearch.forEach((res: any, index: number) => {
+          const date = res.timestamp ? new Date(res.timestamp).toLocaleDateString() : "Unknown Date";
+          memoryContext += `\n[Research Session ${index + 1} - ${date}]\n`;
+          memoryContext += `- Product: ${res.productName || "N/A"}\n`;
+          memoryContext += `- Summary: ${res.summary}\n`;
+          
+          if (res.marketComparison && Array.isArray(res.marketComparison)) {
+            memoryContext += `- Past Market Data:\n`;
+            res.marketComparison.forEach((platform: any) => {
+              memoryContext += `  * ${platform.platform}: Price: ${platform.price}, Demand: ${platform.demandScore}/100, Quality: ${platform.qualityScore}/100\n`;
+            });
+          }
+          memoryContext += `-----------------------------------\n`;
+        });
+        
+        memoryContext += "\nUse this historical data to identify trends, price shifts, or recurring issues. If the current data differs significantly, highlight the change to the user.";
+      }
 
       const systemInstruction = `You are an E-commerce Research Agent. The user wants to analyze a product. 
       Their business goal is: ${goal}. 
@@ -213,7 +264,16 @@ async function startServer() {
       IMPORTANT: You must provide data for visual components:
       1. reasoningFlow: A step-by-step breakdown of how you arrived at your conclusions.
       2. priceComparison: Actual or estimated price points found in the search data.
-      3. marketDashboard: Numerical scores (1-100) for market health metrics.`;
+      3. marketDashboard: Numerical scores (1-100) for market health metrics.
+      4. marketComparison: Detailed comparison across different platforms (Amazon, Flipkart, etc.) for:
+         - price: Average price on that platform.
+         - qualityScore: 1-100 based on reviews.
+         - demandScore: 1-100 based on search volume/sales rank.
+         - supplyLevel: 1-100 (higher means more stock/sellers).
+      5. historicalPriceTrends: Extract any historical price points found in the 'HISTORICAL CONTEXT' provided. 
+         - platform: The marketplace name.
+         - date: The date of the past research.
+         - price: The price recorded at that time.`;
 
       // Helper for retrying with exponential backoff
       const callGeminiWithRetry = async (retries = 3, delay = 2000) => {
@@ -292,6 +352,30 @@ async function startServer() {
                         growthPotential: { type: Type.NUMBER }
                       }
                     },
+                    marketComparison: {
+                      type: Type.ARRAY,
+                      items: {
+                        type: Type.OBJECT,
+                        properties: {
+                          platform: { type: Type.STRING },
+                          price: { type: Type.NUMBER },
+                          qualityScore: { type: Type.NUMBER },
+                          demandScore: { type: Type.NUMBER },
+                          supplyLevel: { type: Type.NUMBER }
+                        }
+                      }
+                    },
+                    historicalPriceTrends: {
+                      type: Type.ARRAY,
+                      items: {
+                        type: Type.OBJECT,
+                        properties: {
+                          platform: { type: Type.STRING },
+                          date: { type: Type.STRING },
+                          price: { type: Type.NUMBER }
+                        }
+                      }
+                    },
                     competitors: { 
                       type: Type.ARRAY, 
                       items: { 
@@ -309,8 +393,9 @@ async function startServer() {
                   },
                   required: [
                     "productName", "summary", "sentimentScore", "sentimentData", 
-                    "reasoningFlow", "priceComparison", "marketDashboard",
-                    "competitors", "topComplaints", "pricingInsights", "strategicRecommendations"
+                    "reasoningFlow", "priceComparison", "marketDashboard", "marketComparison",
+                    "historicalPriceTrends", "competitors", "topComplaints", "pricingInsights", 
+                    "strategicRecommendations"
                   ]
                 }
               }
